@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Modelo 3D - Chica</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #1d1f2b; font-family: system-ui, sans-serif; }
+    #ui {
+      position: fixed; top: 12px; left: 12px; display: flex; flex-wrap: wrap; gap: 8px; z-index: 10;
+    }
+    button, label {
+      background: #ffffffe6; border: 0; border-radius: 8px; padding: 8px 12px; font-size: 14px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    #ayuda { position: fixed; bottom: 12px; left: 12px; color: #cfd3e6; font-size: 13px; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="ui">
+    <button id="btnSaludo">Saludar</button>
+    <button id="btnAnim">Pausar animación</button>
+    <label>Pelo <input type="color" id="colorPelo" value="#5a3420" /></label>
+    <label>Vestido <input type="color" id="colorVestido" value="#e2557a" /></label>
+    <button id="btnExportar">Exportar .glb</button>
+  </div>
+  <div id="ayuda">Arrastrá para rotar · Rueda para zoom · Click derecho para mover</div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
