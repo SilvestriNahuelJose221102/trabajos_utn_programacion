@@ -102,7 +102,7 @@ export function modeloCuerpo(p) {
   const abd = Math.asin(Math.min(0.9, Math.max(0, (xCadera - hombroX + 0.035 * k) / 0.47)));
   const abdReposo = Math.max(0.1, abd);
 
-  return { k, mC, mW, mH, radios, punto, zFrente, zAtras, busto, gluteo, hombroX, caderaX, abdReposo };
+  return { k, mC, mW, mH, radios, zc, punto, zFrente, zAtras, busto, gluteo, hombroX, caderaX, abdReposo };
 }
 
 /** Malla del torso entre y0 e y1; off > 0 la infla (para ropa). */
@@ -165,7 +165,62 @@ function geoMiembro(perfil, t0, t1, k = 1, extra = 0, radial = 28) {
   return g;
 }
 
-function geoCabeza(segW, segH) {
+/**
+ * Pestañas como "cards": una cinta curva con textura de pelos finos que sale
+ * del borde del párpado superior hacia afuera y arriba.
+ */
+function geoPestanas(R, largo = 0.0048) {
+  const N = 28;
+  const filas = [0, 0.45, 1];
+  const pos = [];
+  const uv = [];
+  const idx = [];
+  for (let i = 0; i <= N; i++) {
+    const u = i / N;
+    const phi = Math.PI / 2 - 1.25 + 2.5 * u;
+    const nx = -Math.cos(phi);
+    const nz = Math.sin(phi);
+    const L = largo * (0.35 + 0.65 * Math.sin(Math.PI * Math.pow(u, 0.8)));
+    filas.forEach((f, k) => {
+      const salida = L * f * 1.05;
+      const subida = L * f * f * 0.55;
+      pos.push(nx * (R + salida), subida - L * 0.08 * f, nz * (R + salida));
+      uv.push(u * 6, 1 - k / (filas.length - 1));
+    });
+  }
+  for (let i = 0; i < N; i++) {
+    for (let k = 0; k < filas.length - 1; k++) {
+      const a = i * filas.length + k;
+      const b = a + filas.length;
+      idx.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Tinte de la piel de la cara: rubor en mejillas y nariz, sombra de párpados y ojeras. */
+function colorCara(P) {
+  const c = [1, 1, 1];
+  const mezclar = (tinte, f) => {
+    for (let i = 0; i < 3; i++) c[i] *= 1 + (tinte[i] - 1) * f;
+  };
+  for (const s of [-1, 1]) {
+    mezclar([1.0, 0.84, 0.82], 0.55 * gauss(P.x - s * 0.046, 0.018) * gauss(P.y + 0.035, 0.016)); // mejillas
+    mezclar([0.88, 0.8, 0.8], 0.6 * gauss(P.x - s * 0.033, 0.014) * gauss(P.y - 0.003, 0.005)); // pliegue del párpado
+    mezclar([0.95, 0.88, 0.92], 0.45 * gauss(P.x - s * 0.032, 0.012) * gauss(P.y + 0.021, 0.004)); // ojeras
+  }
+  mezclar([1.0, 0.86, 0.84], 0.4 * gauss(P.x, 0.008) * gauss(P.y + 0.04, 0.007)); // punta de la nariz
+  mezclar([1.0, 0.88, 0.86], 0.3 * gauss(P.x, 0.02) * gauss(P.y + 0.069, 0.01)); // alrededor de la boca
+  mezclar([1.0, 0.92, 0.9], 0.25 * gauss(P.x, 0.02) * gauss(P.y + 0.1, 0.012)); // mentón
+  return c;
+}
+
+function geoCabeza(segW, segH, detalle = false) {
   let g = new THREE.SphereGeometry(1, segW, segH);
   const pos = g.attributes.position;
   const v = new V3();
@@ -179,6 +234,19 @@ function geoCabeza(segW, segH) {
   g.deleteAttribute('uv');
   g = mergeVertices(g);
   g.computeVertexNormals();
+  if (detalle) {
+    const p2 = g.attributes.position;
+    const uv = new Float32Array(p2.count * 2);
+    const col = new Float32Array(p2.count * 3);
+    for (let i = 0; i < p2.count; i++) {
+      v.fromBufferAttribute(p2, i);
+      uv[i * 2] = Math.atan2(v.x, v.z) / (Math.PI * 2) + 0.5;
+      uv[i * 2 + 1] = v.y / 0.25 + 0.5;
+      col.set(colorCara(v), i * 3);
+    }
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  }
   return g;
 }
 
@@ -209,6 +277,7 @@ export function crearPersonaje(p, mats) {
   if (p.inferior !== 'Pollera') add(torso, geoTorso(m, 0.762, yCintura, 0.022), mats.inferior, 'Pantalon');
   add(torso, geoTorso(m, mangaLarga ? 0.92 : 0.95, 1.405, 0.032), mats.superior, 'Remera');
 
+  let pollera = null;
   if (p.inferior === 'Pollera') {
     const zEsc = 0.8;
     const perfil = [];
@@ -222,10 +291,14 @@ export function crearPersonaje(p, mats) {
       rPrev = r;
       perfil.push(new THREE.Vector2(r, y));
     }
+    const perfilFisica = perfil.map((v) => [v.y, v.x]).filter(([y]) => y >= 0.6);
     perfil.reverse();
-    const g = new THREE.LatheGeometry(perfil, 56);
+    const g = new THREE.LatheGeometry(perfil, 64);
     g.scale(1, 1, zEsc);
-    add(torso, g, mats.inferior, 'Pollera');
+    pollera = add(torso, g, mats.inferior, 'Pollera');
+    pollera.userData.perfil = perfilFisica;
+    pollera.userData.zEsc = zEsc;
+    pollera.frustumCulled = false;
   }
 
   // ---------- Cabeza ----------
@@ -238,11 +311,16 @@ export function crearPersonaje(p, mats) {
   cabeza.position.copy(CENTRO_CABEZA).sub(POS_CUELLO);
   cuello.add(cabeza);
   const cara = crearCara(p, mats, cabeza, add);
-  cabeza.add(crearPelo(p, m, mats, CENTRO_CABEZA));
+  const pelo = crearPelo(p, m, mats, CENTRO_CABEZA);
+  cabeza.add(pelo);
 
   // ---------- Brazos ----------
   const hombros = [];
   const codos = [];
+  const munecas = [];
+  const caderas = [];
+  const rodillas = [];
+  const tobillos = [];
   for (const s of [1, -1]) {
     const hombro = new THREE.Group();
     hombro.name = s > 0 ? 'HombroIzq' : 'HombroDer';
@@ -273,6 +351,7 @@ export function crearPersonaje(p, mats) {
     crearMano(muneca, s, mats.piel, k, add);
     hombros.push(hombro);
     codos.push(codo);
+    munecas.push(muneca);
   }
 
   // ---------- Piernas ----------
@@ -294,12 +373,15 @@ export function crearPersonaje(p, mats) {
     tobillo.position.y = -0.4;
     rodilla.add(tobillo);
     crearZapatilla(tobillo, mats, k, add);
+    caderas.push(cadera);
+    rodillas.push(rodilla);
+    tobillos.push(tobillo);
   }
 
   return {
     raiz,
     modelo: m,
-    partes: { cuello, cabeza, hombros, codos, ...cara },
+    partes: { cuello, cabeza, hombros, codos, munecas, caderas, rodillas, tobillos, pollera, pelo, ...cara },
   };
 }
 
@@ -354,7 +436,7 @@ function crearZapatilla(padre, mats, k, add) {
 }
 
 function crearCara(p, mats, cabeza, add) {
-  add(cabeza, geoCabeza(220, 160), mats.piel, 'Craneo');
+  add(cabeza, geoCabeza(220, 160, true), mats.pielCara, 'Craneo');
 
   // Malla auxiliar para ubicar rasgos sobre la superficie de la cara.
   const proxy = new THREE.Mesh(geoCabeza(96, 64), new THREE.MeshBasicMaterial());
@@ -384,6 +466,8 @@ function crearCara(p, mats, cabeza, add) {
     add(ojo, new THREE.SphereGeometry(r, 32, 24), mats.ojoBlanco, 'Esclerotica', false);
     add(ojo, new THREE.SphereGeometry(r * 1.004, 32, 6, 0, Math.PI * 2, 0, 0.5), mats.iris, 'Iris', false).rotation.x = Math.PI / 2;
     add(ojo, new THREE.SphereGeometry(r * 1.008, 24, 4, 0, Math.PI * 2, 0, 0.21), mats.pupila, 'Pupila', false).rotation.x = Math.PI / 2;
+    const cornea = add(ojo, new THREE.SphereGeometry(r * 1.03, 32, 10, 0, Math.PI * 2, 0, 0.62), mats.cornea, 'Cornea', false);
+    cornea.rotation.x = Math.PI / 2;
     ojos.push(ojo);
 
     const pg = new THREE.Group();
@@ -393,7 +477,8 @@ function crearCara(p, mats, cabeza, add) {
     cabeza.add(pg);
     const parpado = add(pg, new THREE.SphereGeometry(r * 1.06, 32, 12, 0, Math.PI * 2, 0, Math.PI / 2), mats.piel, 'ParpadoSup', false);
     parpado.rotation.x = -0.27;
-    add(parpado, new THREE.SphereGeometry(r * 1.09, 32, 2, Math.PI / 2 - 1.35, 2.7, Math.PI / 2 - 0.13, 0.13), mats.pestanas, 'Pestanas', false);
+    add(parpado, new THREE.SphereGeometry(r * 1.075, 32, 2, Math.PI / 2 - 1.35, 2.7, Math.PI / 2 - 0.05, 0.05), mats.delineado, 'Delineado', false);
+    const pest = add(parpado, geoPestanas(r * 1.07), mats.pestanas, 'Pestanas', false);
     add(pg, new THREE.SphereGeometry(r * 1.05, 32, 8, 0, Math.PI * 2, Math.PI - 1.1, 1.1), mats.piel, 'ParpadoInf', false).rotation.x = 0.05;
     parpados.push(parpado);
 

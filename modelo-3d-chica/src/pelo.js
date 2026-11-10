@@ -26,13 +26,31 @@ class Mechones {
     this.col = [];
     this.idx = [];
     this.n = 0;
+    this.cartas = []; // datos para la física: mechones que cuelgan
   }
 
-  agregar(puntos, ancho, centroDe, brillo) {
+  /**
+   * Agrega un mechón. iColgar: índice de `puntos` donde el pelo deja el cuero
+   * cabelludo y empieza a colgar (a partir de ahí lo mueve la física); -1 = rígido.
+   */
+  agregar(puntos, ancho, centroDe, brillo, iColgar = -1) {
     const curva = new THREE.CatmullRomCurve3(puntos, false, 'centripetal');
-    const seg = Math.max(6, Math.min(70, Math.round(curva.getLength() / 0.012)));
+    const largoCurva = curva.getLength();
+    const seg = Math.max(6, Math.min(70, Math.round(largoCurva / 0.012)));
     const ps = curva.getSpacedPoints(seg);
     const base = this.n;
+    if (iColgar >= 0) {
+      let lp = 0;
+      let l0 = 0;
+      for (let i = 1; i < puntos.length; i++) {
+        lp += puntos[i].distanceTo(puntos[i - 1]);
+        if (i === iColgar) l0 = lp;
+      }
+      const s0 = (l0 * largoCurva) / lp;
+      const s = new Float32Array(seg + 1);
+      for (let i = 0; i <= seg; i++) s[i] = (i / seg) * largoCurva - s0;
+      if (s[seg] > 0.03) this.cartas.push({ v0: base, seg, s, ps });
+    }
     const t = new V3();
     const o = new V3();
     const lado = new V3();
@@ -62,6 +80,56 @@ class Mechones {
       }
     }
     this.n += (seg + 1) * 2;
+  }
+
+  /**
+   * Elige K mechones guía (los que simula la física) y asocia cada mechón
+   * a sus 2 guías más cercanas.
+   */
+  guias(K) {
+    const cartas = this.cartas;
+    if (!cartas.length) return null;
+    const posEn = (c, s) => {
+      const f = Math.min(c.seg, Math.max(0, ((s - c.s[0]) / (c.s[c.seg] - c.s[0])) * c.seg));
+      const i = Math.min(c.seg - 1, Math.floor(f));
+      return c.ps[i].clone().lerp(c.ps[i + 1], f - i);
+    };
+    for (const c of cartas) {
+      c.a = posEn(c, 0);
+      c.b = posEn(c, Math.min(0.1, c.s[c.seg]));
+    }
+    const dist = (c, d) => c.a.distanceTo(d.a) + c.b.distanceTo(d.b);
+    // Muestreo por punto más lejano para repartir las guías.
+    const elegidas = [cartas[0]];
+    const dMin = cartas.map((c) => dist(c, cartas[0]));
+    while (elegidas.length < Math.min(K, cartas.length)) {
+      let mejor = 0;
+      for (let i = 1; i < cartas.length; i++) if (dMin[i] > dMin[mejor]) mejor = i;
+      elegidas.push(cartas[mejor]);
+      for (let i = 0; i < cartas.length; i++) dMin[i] = Math.min(dMin[i], dist(cartas[i], cartas[mejor]));
+    }
+    const ds = 0.025;
+    const guias = elegidas.map((c) => {
+      const rest = [];
+      for (let s = -ds; s <= c.s[c.seg] + 1e-6; s += ds) rest.push(posEn(c, s));
+      return { rest, ds };
+    });
+    for (const c of cartas) {
+      const d = elegidas.map((g) => dist(c, g));
+      const orden = d.map((v, i) => i).sort((x, y) => d[x] - d[y]);
+      const [g1, g2] = [orden[0], orden[1] ?? orden[0]];
+      const w1 = 1 / (d[g1] + 1e-4);
+      const w2 = 1 / (d[g2] + 1e-4);
+      c.g1 = g1;
+      c.g2 = g2;
+      c.w1 = w1 / (w1 + w2);
+      c.w2 = w2 / (w1 + w2);
+    }
+    for (const c of cartas) {
+      delete c.a;
+      delete c.b;
+    }
+    return guias;
   }
 
   geometria() {
@@ -195,7 +263,7 @@ export function crearPelo(p, m, mats, C) {
         pts.push(r.sub(C));
       }
       const eje = atadura.clone().add(new V3(0, -Lt * 0.5, -0.04));
-      mech.agregar(pts, lerp(0.014, 0.022, rand()), (q) => new V3(eje.x, q.y, eje.z), lerp(0.85, 1.12, rand()));
+      mech.agregar(pts, lerp(0.014, 0.022, rand()), (q) => new V3(eje.x, q.y, eje.z), lerp(0.85, 1.12, rand()), 0);
     }
     const gomita = new THREE.Mesh(new THREE.TorusGeometry(0.016, 0.0055, 10, 24), mats.gomita);
     gomita.name = 'Gomita';
@@ -243,8 +311,9 @@ export function crearPelo(p, m, mats, C) {
       }
       const pts = dirs.map((q, i) => puntoCuero(q, lerp(1.012, capa, Math.min(1, i / 3))));
       const adelante = w > 0.6 && rand() < 0.75;
+      const iColgar = pts.length - 1;
       colgar(pts, Math.max(0.02, p.largo * (0.72 + rand() * 0.5) - (1 - w) * 0.03), adelante);
-      mech.agregar(pts, lerp(0.018, 0.03, rand()), centroCabeza, lerp(0.85, 1.12, rand()));
+      mech.agregar(pts, lerp(0.018, 0.03, rand()), centroCabeza, lerp(0.85, 1.12, rand()), iColgar);
     }
   }
 
@@ -265,6 +334,18 @@ export function crearPelo(p, m, mats, C) {
   const mallaMechones = new THREE.Mesh(mech.geometria(), mats.peloMechones);
   mallaMechones.name = 'PeloMechones';
   mallaMechones.receiveShadow = true;
+  mallaMechones.castShadow = true;
+  mallaMechones.frustumCulled = false;
   grupo.add(mallaMechones);
+
+  const guias = mech.guias(p.peinado === 'Colita' ? 14 : 48);
+  if (guias) {
+    grupo.userData.fisica = {
+      malla: mallaMechones,
+      reposo: Float32Array.from(mallaMechones.geometry.attributes.position.array),
+      cartas: mech.cartas,
+      guias,
+    };
+  }
   return grupo;
 }
