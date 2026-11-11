@@ -22,6 +22,16 @@ export function huesosVRM(vrm) {
     pose[p] = vrm.humanoid.getNormalizedBoneNode(nombre) || vrm.humanoid.getNormalizedBoneNode(p === 'chest' ? 'upperChest' : p);
     reales[p] = vrm.humanoid.getRawBoneNode(nombre);
   }
+  // Dedos (solo para posar): falanges de cada dedo.
+  for (const lado of ['left', 'right']) {
+    for (const [dedo, partes] of [['Thumb', ['Metacarpal', 'Proximal', 'Distal']], ...['Index', 'Middle', 'Ring', 'Little'].map((d) => [d, ['Proximal', 'Intermediate', 'Distal']])]) {
+      for (const parte of partes) {
+        const n = lado + dedo + parte;
+        const nodo = vrm.humanoid.getNormalizedBoneNode(n);
+        if (nodo) pose[n] = nodo;
+      }
+    }
+  }
   return { pose, reales };
 }
 
@@ -86,7 +96,7 @@ export class Posador {
     this.raiz = raiz;
     this.h = huesos;
     this.reposo = new Map();
-    for (const p of PARTES) if (huesos[p]) this.reposo.set(huesos[p], huesos[p].quaternion.clone());
+    for (const p of Object.keys(huesos)) if (huesos[p]) this.reposo.set(huesos[p], huesos[p].quaternion.clone());
   }
 
   /** Vuelve todos los huesos a la pose de reposo. */
@@ -108,6 +118,33 @@ export class Posador {
 
   rotar(parte, x = 0, y = 0, z = 0) {
     this.rotarQ(parte, new THREE.Quaternion().setFromEuler(_e.set(x, y, z)));
+  }
+
+  /** Rotación en el marco propio del hueso (para manos y dedos). */
+  local(parte, x = 0, y = 0, z = 0) {
+    const b = this.h[parte];
+    if (b) b.quaternion.multiply(_q.setFromEuler(_e.set(x, y, z)));
+  }
+
+  /** Gira un hueso sobre su propio eje (por ejemplo, rotar el antebrazo). */
+  girarEje(parte, hijo, ang) {
+    const d = this.direccion(parte, hijo);
+    if (d) this.rotarQ(parte, new THREE.Quaternion().setFromAxisAngle(d, ang));
+  }
+
+  /** Dedos: flexión (0 = rectos, 1 = puño) y apertura entre dedos. */
+  dedos(lado, flexion, apertura = 0) {
+    const s = lado === 'left' ? -1 : 1;
+    const curva = { Index: 1, Middle: 1.08, Ring: 1.16, Little: 1.24 };
+    const abre = { Index: -1, Middle: -0.3, Ring: 0.4, Little: 1 };
+    for (const d of ['Index', 'Middle', 'Ring', 'Little']) {
+      const a = flexion * 1.25 * curva[d];
+      this.local(lado + d + 'Proximal', 0, apertura * 0.18 * abre[d] * -s, s * a * 0.8);
+      this.local(lado + d + 'Intermediate', 0, 0, s * a);
+      this.local(lado + d + 'Distal', 0, 0, s * a * 0.7);
+    }
+    this.local(lado + 'ThumbProximal', 0, s * flexion * 0.5, s * flexion * 0.25);
+    this.local(lado + 'ThumbDistal', 0, s * flexion * 0.6, 0);
   }
 
   /** Dirección actual de un hueso hacia su hijo, en ejes del personaje. */
@@ -142,6 +179,7 @@ export class Posador {
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 const _p = new THREE.Vector3();
+const _n = new THREE.Vector3();
 
 /** Colisionador del cuerpo con cápsulas entre huesos (compatible con Pelotas de ../fisica.js). */
 export class ColisionadorHuesos {
@@ -194,7 +232,7 @@ export class ColisionadorHuesos {
     }
   }
 
-  resolver(p, r, n) {
+  resolver(p, r, n = _n) {
     let zona = null;
     for (const [a, b, rc, z] of this.capsulas) {
       _a.subVectors(b, a);

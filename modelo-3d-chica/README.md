@@ -47,7 +47,10 @@ La configuración se guarda en el navegador (`localStorage`) y se recupera al vo
 
 - **Modelo incluido**: `modelos/chica-anime.glb` es el modelo de ejemplo `VRM1_Constraint_Twist_Sample` de pixiv Inc. (repositorio [pixiv/three-vrm](https://github.com/pixiv/three-vrm)), en formato VRM 1.0 dentro de un contenedor GLB. Su licencia embebida ([VRM Public License 1.0](https://vrm.dev/licenses/1.0/)) permite redistribuirlo y modificarlo, sin obligación de crédito. Ver `modelos/LICENCIA.md`.
 - **Se carga con** [three-vrm](https://github.com/pixiv/three-vrm) 3.3.3 (MIT): sombreado MToon (estilo anime con contorno), expresiones, mirada que sigue a la cámara y física de pelo y ropa (*spring bones*).
-- **Personalización**: color de pelo, ojos y ropa (la textura se pasa a escala de grises y se tiñe), grosor del contorno, expresión (feliz, enojada, triste, relajada, sorprendida) e intensidad.
+- **Cuerpo adulto (≈28 años)**: además del tamaño, se cambian las proporciones del modelo (cabeza más chica, cuello y piernas más largos, caderas más anchas, busto e iris) moviendo los vértices y los huesos en la pose de enlace y recalculando el esqueleto, así las animaciones y la física siguen funcionando. Hay un preajuste "Adulta (≈28 años)" y otro con las proporciones originales del modelo.
+- **Ropa**: arriba remera o remera manga larga; abajo short, pantalón largo, pollera corta o pollera larga; calzado zapatillas o botas, cada uno con su color. Las mangas, el pantalón y las botas se generan a partir del cuerpo y se enlazan al mismo esqueleto; las polleras son tela simulada colgada de la cadera que choca con las piernas y las pelotas.
+- **Animaciones**: poses (relajada, manos en la cintura, brazos cruzados, peso en una pierna), ciclos (bailar, caminar en el lugar) y acciones (saludar con la mano y los dedos en movimiento, aplaudir, pensar, estirarse, reverencia, saltar con impulso y amortiguación, girar, sacudir la cabeza). Las manos tienen los dedos relajados y se animan en cada gesto.
+- **Personalización de cara y pelo**: color de pelo y ojos (la textura se pasa a escala de grises y se tiñe), grosor del contorno, expresión (feliz, enojada, triste, relajada, sorprendida) e intensidad.
 - **Física**: viento con ráfagas aplicado a los *spring bones*, rigidez del pelo y la ropa, pelotas que chocan contra el cuerpo (cápsulas armadas sobre los huesos) y también empujan el pelo, reacción del torso y la cabeza a los golpes, giro, salto y sacudida de cabeza.
 - **Tu propio modelo**: botón "Abrir mi modelo" o arrastrar el archivo a la página (`.vrm`, `.glb`, `.gltf`, `.fbx`). Se detectan los huesos de los esqueletos más comunes (VRM, MakeHuman, Mixamo, Unreal/Unity) para bajar los brazos si viene en pose T, animarlo y armar las colisiones. Los modelos que no son VRM no traen física de pelo; las pelotas y la reacción a golpes funcionan igual.
 
@@ -90,8 +93,11 @@ modelo-3d-chica/
     ├── materiales.js   # Materiales y texturas procedurales
     ├── util.js         # Splines, deformación de la cabeza, tubos afinados
     └── anime/
-        ├── main.js     # Visor VRM/GLB/FBX: carga, apariencia, física, animación
-        └── esqueleto.js# Detección de huesos, poses y colisiones por cápsulas
+        ├── main.js         # Visor VRM/GLB/FBX: carga, panel, física y bucle
+        ├── esqueleto.js    # Detección de huesos, poses, dedos y colisiones por cápsulas
+        ├── proporciones.js # Cambia las proporciones del VRM (edad aparente)
+        ├── ropa.js         # Mangas, pantalón, botas y polleras
+        └── animaciones.js  # Poses, ciclos y acciones
 ```
 
 ## Limitaciones
