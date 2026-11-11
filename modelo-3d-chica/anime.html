@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chica anime 3D</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #d9e6f2; font-family: system-ui, sans-serif; }
+    canvas { display: block; }
+    #ayuda { position: fixed; bottom: 12px; left: 12px; right: 12px; color: #2c3a4f; font-size: 13px; pointer-events: none; }
+    #ayuda a { pointer-events: auto; color: #1f5fa8; }
+    #estado { position: fixed; bottom: 56px; left: 12px; max-width: min(520px, calc(100% - 24px)); background: #ffffffe8; color: #2c3a4f; padding: 8px 12px; border-radius: 8px; font-size: 13px; }
+    #estado.error { background: #ffe3e3; color: #8a1f1f; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/",
+        "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@3.3.3/lib/three-vrm.module.min.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="estado" hidden></div>
+  <div id="ayuda">Arrastrá para rotar · Doble clic para lanzar una pelota · Soltá un archivo .vrm, .glb o .fbx para cargar tu modelo · <a href="./index.html">Versión hecha por código</a></div>
+  <script type="module" src="./src/anime/main.js"></script>
+</body>
+</html>

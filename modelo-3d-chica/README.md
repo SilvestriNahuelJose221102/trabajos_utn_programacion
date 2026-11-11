@@ -2,6 +2,13 @@
 
 Personaje femenino adulto en 3D, generado 100% por código con [Three.js](https://threejs.org/) r170 (sin modelos externos), con físicas en tiempo real. No requiere instalar nada ni compilar.
 
+## Dos versiones
+
+| Página | Qué es |
+|---|---|
+| `index.html` | Personaje hecho 100% por código (cuerpo paramétrico, pelo con mechones, físicas propias). |
+| `anime.html` | Visor de modelos VRM/GLB/FBX. Arranca con una chica anime (sombreado *toon* con contorno) y permite **abrir tu propio modelo**: uno anime hecho en VRoid Studio (`.vrm`) o uno realista exportado desde MakeHuman 2 (`.glb`), Blender, Mixamo, etc. |
+
 ## Cómo verlo
 
 Los módulos ES no cargan desde `file://`; hace falta un servidor local:
@@ -36,6 +43,19 @@ La configuración se guarda en el navegador (`localStorage`) y se recupera al vo
 - **Pelo**: casquete con textura + cientos de *hair cards* (cintas con textura de mechones y *alpha test*), igual que en los videojuegos. Cada mechón se calcula sobre el cuero cabelludo y cae con gravedad, apoyándose sobre hombros, espalda y busto.
 - **Materiales**: piel con `MeshPhysicalMaterial` (sheen + clearcoat), denim y tejido con texturas procedurales en `canvas`, iluminación con entorno PMREM, sombras suaves y *tone mapping* ACES.
 
+## Versión anime y modelos propios (`anime.html`)
+
+- **Modelo incluido**: `modelos/chica-anime.glb` es el modelo de ejemplo `VRM1_Constraint_Twist_Sample` de pixiv Inc. (repositorio [pixiv/three-vrm](https://github.com/pixiv/three-vrm)), en formato VRM 1.0 dentro de un contenedor GLB. Su licencia embebida ([VRM Public License 1.0](https://vrm.dev/licenses/1.0/)) permite redistribuirlo y modificarlo, sin obligación de crédito. Ver `modelos/LICENCIA.md`.
+- **Se carga con** [three-vrm](https://github.com/pixiv/three-vrm) 3.3.3 (MIT): sombreado MToon (estilo anime con contorno), expresiones, mirada que sigue a la cámara y física de pelo y ropa (*spring bones*).
+- **Personalización**: color de pelo, ojos y ropa (la textura se pasa a escala de grises y se tiñe), grosor del contorno, expresión (feliz, enojada, triste, relajada, sorprendida) e intensidad.
+- **Física**: viento con ráfagas aplicado a los *spring bones*, rigidez del pelo y la ropa, pelotas que chocan contra el cuerpo (cápsulas armadas sobre los huesos) y también empujan el pelo, reacción del torso y la cabeza a los golpes, giro, salto y sacudida de cabeza.
+- **Tu propio modelo**: botón "Abrir mi modelo" o arrastrar el archivo a la página (`.vrm`, `.glb`, `.gltf`, `.fbx`). Se detectan los huesos de los esqueletos más comunes (VRM, MakeHuman, Mixamo, Unreal/Unity) para bajar los brazos si viene en pose T, animarlo y armar las colisiones. Los modelos que no son VRM no traen física de pelo; las pelotas y la reacción a golpes funcionan igual.
+
+### Cómo hacer tu propio modelo
+
+- **Anime**: [VRoid Studio](https://vroid.com/en/studio) (gratis). Creá el personaje con los controles deslizantes y exportá en **VRM**.
+- **Realista**: [MakeHuman 2](https://www.makehumancommunity.org/) (gratis). Elegí cuerpo, cara, pelo y ropa, y exportá en **glTF (.glb)** con esqueleto.
+
 ## Físicas
 
 Motor propio en `src/fisica.js`, sin librerías:
@@ -58,7 +78,9 @@ Motor propio en `src/fisica.js`, sin librerías:
 
 ```
 modelo-3d-chica/
-├── index.html          # Página e importmap de Three.js (CDN unpkg)
+├── index.html          # Versión hecha por código
+├── anime.html          # Versión anime / visor de modelos propios
+├── modelos/            # Modelo VRM de ejemplo y su licencia
 └── src/
     ├── main.js         # Escena, luces, cámara, panel (lil-gui), animación, exportación
     ├── fisica.js       # Colisiones, pelo, pollera, pelotas y resortes
@@ -66,7 +88,10 @@ modelo-3d-chica/
     ├── personaje.js    # Modelo del cuerpo, cara, manos, zapatillas y ropa
     ├── pelo.js         # Casquete y mechones para cada peinado
     ├── materiales.js   # Materiales y texturas procedurales
-    └── util.js         # Splines, deformación de la cabeza, tubos afinados
+    ├── util.js         # Splines, deformación de la cabeza, tubos afinados
+    └── anime/
+        ├── main.js     # Visor VRM/GLB/FBX: carga, apariencia, física, animación
+        └── esqueleto.js# Detección de huesos, poses y colisiones por cápsulas
 ```
 
 ## Limitaciones
